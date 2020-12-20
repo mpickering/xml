@@ -1,4 +1,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE StrictData #-}
+{-# LANGUAGE Strict #-}
+{-# OPTIONS_GHC -ddump-to-file -ddump-simpl -ddump-stg #-}
 
 module Text.XML.Light.Lexer where
 
@@ -116,9 +120,9 @@ special c cs =
                    } : tokens' ts
   where munch acc nesting ((_,'>') : ds)
          | nesting == (0::Int) = ('>':acc,ds)
-         | otherwise           = munch ('>':acc) (nesting-1) ds
+	 | otherwise           = munch ('>':acc) (nesting-1) ds
         munch acc nesting ((_,'<') : ds)
-         = munch ('<':acc) (nesting+1) ds
+	 = munch ('<':acc) (nesting+1) ds
         munch acc n ((_,x) : ds) = munch (x:acc) n ds
         munch acc _ [] = (acc,[]) -- unterminated DTD markup
 
@@ -167,9 +171,10 @@ attribs cs        = case cs of
                                   in (a:as,b,ts)
 
 attrib             :: LString -> (Attr,LString)
-attrib cs           = let (ks,cs1)  = qualName cs
+attrib cs           = let (!ks,cs1)  = qualName cs
                           (vs,cs2)  = attr_val (dropSpace cs1)
-                      in ((Attr ks (decode_attr vs)),dropSpace cs2)
+                          !a = decode_attr vs
+                      in ((Attr ks a),dropSpace cs2)
 
 attr_val           :: LString -> (String,LString)
 attr_val ((_,'=') : cs) = string (dropSpace cs)
@@ -193,7 +198,7 @@ string cs           = breakn eos cs
 
 
 break' :: (a -> Bool) -> [(b,a)] -> ([a],[(b,a)])
-break' p xs         = let (as,bs) = breakn p xs
+break' p xs         = let (!as,!bs) = breakn p xs
                       in (as, case bs of
                                 [] -> []
                                 _ : cs -> cs)
@@ -201,10 +206,14 @@ break' p xs         = let (as,bs) = breakn p xs
 breakn :: (a -> Bool) -> [(b,a)] -> ([a],[(b,a)])
 breakn p l = (map snd as,bs) where (as,bs) = break (p . snd) l
 
-
+forceList :: [a] -> ()
+forceList [] = ()
+forceList (!x:xs) = x `seq` forceList xs
 
 decode_attr :: String -> String
-decode_attr cs = concatMap cvt (decode_text cs)
+decode_attr cs =
+  let !res = concatMap cvt (decode_text cs)
+  in forceList res `seq` res
   where cvt (TxtBit x) = x
         cvt (CRefBit x) = case cref_to_char x of
                             Just c -> [c]
@@ -217,8 +226,9 @@ decode_text xs@('&' : cs) = case break (';' ==) cs of
                               (as,_:bs) -> CRefBit as : decode_text bs
                               _ -> [TxtBit xs]
 decode_text []  = []
-decode_text cs  = let (as,bs) = break ('&' ==) cs
-                  in TxtBit as : decode_text bs
+decode_text cs  = let !(!as,!bs) = break ('&' ==) cs
+                      !decoded = decode_text bs
+                  in TxtBit as : decoded
 
 cref_to_char :: [Char] -> Maybe Char
 cref_to_char cs = case cs of

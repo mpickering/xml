@@ -12,6 +12,7 @@
 --
 
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE StrictData #-}
 module Text.XML.Light.Types where
 
 import Data.Typeable(Typeable)

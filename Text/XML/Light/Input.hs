@@ -1,3 +1,7 @@
+{-# OPTIONS_GHC -ddump-simpl -ddump-stg -ddump-to-file #-}
+{-# LANGUAGE Strict #-}
+{-# LANGUAGE StrictData #-}
+{-# LANGUAGE BangPatterns #-}
 --------------------------------------------------------------------
 -- |
 -- Module    : Text.XML.Light.Input
@@ -61,14 +65,14 @@ nodes ns ps (TokText txt : ts) =
 
   in (Text txt { cdData = cdData txt ++ more } : es1, qs, ts1)
 
-nodes cur_info ps (TokStart p t as empty : ts) = (node : siblings, open, toks)
+nodes cur_info ps (TokStart p t as empty : ts) = (node `seq` node : siblings, open, toks)
   where
-  new_name  = annotName new_info t
-  new_info  = foldr addNS cur_info as
-  node      = Elem Element { elLine    = Just p
+  !new_name  = annotName new_info t
+  !new_info  = foldr addNS cur_info as
+  !node      = Elem Element { elLine    = Just p
                            , elName    = new_name
                            , elAttribs = map (annotAttr new_info) as
-                           , elContent = children
+                           , elContent = forceList children `seq` children
                            }
 
   (children,(siblings,open,toks))
